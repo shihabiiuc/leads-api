@@ -2,8 +2,14 @@ import os
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, EmailStr
+
+api_key_header = APIKeyHeader(name="X-API-Key")
+def verify_api_key(api_key: str = Security(api_key_header)):
+    if api_key != os.getenv("API_KEY"):
+        raise HTTPException(status_code=401, detail="Invalid API Key")
 
 load_dotenv()
 app = FastAPI()
@@ -42,7 +48,7 @@ def get_lead(lead_id: int):
     return lead
 
 
-@app.post("/leads", status_code=201)
+@app.post("/leads", status_code=201, dependencies=[Depends(verify_api_key)])
 def create_lead(lead: Lead):
     with get_connection() as conn:
         row = conn.execute(
@@ -52,7 +58,7 @@ def create_lead(lead: Lead):
     return {"id": row["id"], **lead.model_dump()}
 
 
-@app.put("/leads/{lead_id}")
+@app.put("/leads/{lead_id}", dependencies=[Depends(verify_api_key)])
 def update_lead(lead_id: int, lead: Lead):
     with get_connection() as conn:
         cursor = conn.execute(
@@ -65,7 +71,7 @@ def update_lead(lead_id: int, lead: Lead):
     return {"id": lead_id, **lead.model_dump()}
 
 
-@app.delete("/leads/{lead_id}")
+@app.delete("/leads/{lead_id}", dependencies=[Depends(verify_api_key)])
 def delete_lead(lead_id: int):
     with get_connection() as conn:
         cursor = conn.execute("DELETE FROM leads WHERE id = %s", (lead_id,))
